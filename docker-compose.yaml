@@ -1,0 +1,10 @@
+services:
+  intranet:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./:/usr/share/nginx/html:ro
+    restart: unless-stopped
+    container_name: intranet-menu
+    

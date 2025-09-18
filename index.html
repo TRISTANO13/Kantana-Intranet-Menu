@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Intranet – Menu</title>
+  <style>
+    :root{
+      --bg:#0b0d12;--card:#151922;--muted:#9cb29a;--text:#e5e7eb;--accent:#3144eb;--ok:#16a34a;--warn:#f59e0b;--bad:#ef4444;--hover:#1f2633;--tag:#000000
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;background:var(--bg);color:var(--text)}
+    header{position:sticky;top:0;z-index:10;background:linear-gradient(180deg,rgba(11,13,18,.95),rgba(11,13,18,.7) 70%,transparent);backdrop-filter:blur(6px)}
+    .wrap{max-width:1100px;margin:0 auto;padding:16px}
+    h1{margin:0 0 6px;font-size:clamp(20px,3vw,28px)}
+    .sub{color:var(--muted);font-size:14px}
+    .controls{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+    .search{flex:1;min-width:220px;display:flex;gap:8px;align-items:center;background:var(--card);border:1px solid #2a3140;border-radius:12px;padding:10px 12px}
+    .search input{all:unset;flex:1}
+    .btn{border:1px solid #2a3140;background:var(--card);padding:10px 14px;border-radius:12px;color:var(--text);cursor:pointer}
+    .btn:hover{background:var(--hover)}
+    .tags{display:flex;gap:8px;flex-wrap:wrap}
+    .tag{padding:6px 10px;border-radius:999px;border:1px solid #2a3140;color:var(--tag);cursor:pointer}
+    .tag.active{border-color:var(--accent);color:#3144eb}
+
+    .grid{display:grid;grid-template-columns:repeat( auto-fill, minmax(300px,1fr));gap:14px;margin-top:16px}
+    .card{position:relative;border:1px solid #2a3140;background:var(--card);border-radius:16px;padding:14px;transition:transform .1s ease, background .2s}
+    .card:hover{transform:translateY(-2px);background:var(--hover)}
+    .card a{color:inherit;text-decoration:none;display:block}
+    .row{display:flex;gap:12px;align-items:center}
+    .icon{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;font-size:22px;background:#0f1420;border:1px solid #2a3140}
+    .name{font-weight:700}
+    .url{font-size:12px;color:var(--muted);word-break:break-all}
+    .meta{display:flex;justify-content:space-between;align-items:center;margin-top:10px}
+    .chips{display:flex;gap:6px;flex-wrap:wrap}
+    .chip{font-size:11px;color:var(--muted);border:1px solid #2a3140;padding:4px 8px;border-radius:999px}
+    .status{font-size:12px;display:flex;gap:6px;align-items:center}
+    .dot{width:8px;height:8px;border-radius:999px;background:var(--muted)}
+    .ok{background:var(--ok)}.bad{background:var(--bad)}.warn{background:var(--warn)}
+    .favorite{position:absolute;top:10px;right:10px;border:none;background:transparent;color:#ffd166;cursor:pointer;font-size:18px}
+
+    .section{margin-top:20px}
+    .section h2{font-size:16px;color:#cbd5e1;margin:0 0 8px}
+
+    footer{opacity:.7;color:var(--muted);font-size:12px;margin:26px 0 40px}
+    .hidden{display:none}
+  </style>
+</head>
+
+
+<body>
+  <header>
+    <div class="wrap">
+      <h1>Kantana Server</h1>
+      <div class="sub">Find all internal tools • Favs ★ • Status</div>
+      <div class="controls">
+        <label class="search" aria-label="Rechercher">
+          <span>🔎</span>
+          <input id="q" placeholder="Search by name, tags, URL…" />
+          <button class="btn" id="clearBtn" title="Effacer">✕</button>
+        </label>
+        <button class="btn" id="onlyFavBtn" aria-pressed="false">Show my favs</button>
+        <button class="btn" id="checkAllBtn">Status verification</button>
+      </div>
+      <div class="tags" id="tagBar"></div>
+    </div>
+  </header>
+
+  <main class="wrap" id="app"></main>
+
+  <footer class="wrap">Astuce: ajoutez/éditez les services dans <code>SERVICE_LIST</code> ci‑dessous. Pour le statut, exposez un endpoint rapide (ex: <code>/health</code>) renvoyant 200.</footer>
+
+<script>
+  // ====== 1) CONFIGUREZ VOS SERVICES ICI ======
+  /** @type {Array<{name:string,url:string,icon?:string,tags?:string[],category?:string, health?:string}>} */
+  const SERVICE_LIST = [
+    { name:"Wiki (Wiki.js)", url:"http://tools.cg.kantana.co.th:8001", icon:"📄", tags:["Docs","Information"], category:"Documentation"},
+    { name:"Ayon", url:"http://tools.cg.kantana.co.th:8002", icon:"🎞️", tags:["VFX","Pipeline"], category:"Tools"},
+    { name:"Asset Library", url:"http://tools.cg.kantana.co.th:8003", icon:"📚", tags:["Ressources","3D"], category:"Tools"},
+    { name:"Excalidraw (Under development)", url:"http://tools.cg.kantana.co.th:8004", icon:"✏️", tags:["Whiteboard","Collaborative"], category:"Tools"}
+  ];
+
+  // ====== 2) PETITE LIB UTIL ======
+  const $ = sel => document.querySelector(sel);
+  const create = (tag, attrs={}) => Object.assign(document.createElement(tag), attrs);
+  const slug = s => (s||"").toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu,'');
+
+  // Favoris
+  const FAV_KEY = 'intranet:favs';
+  const getFavs = () => new Set(JSON.parse(localStorage.getItem(FAV_KEY)||'[]'));
+  const setFavs = (s) => localStorage.setItem(FAV_KEY, JSON.stringify([...s])); 
+
+  // ====== 3) RENDU ======
+  let activeTag = null; let onlyFav = false; let q = '';
+
+  function gatherTags(){
+    const t = new Set();
+    SERVICE_LIST.forEach(s => (s.tags||[]).forEach(x=>t.add(x)));
+    return [...t].sort((a,b)=>a.localeCompare(b,'fr'));
+  }
+
+  function renderTags(){
+    const bar = $('#tagBar');
+    bar.innerHTML = '';
+    const allBtn = create('button',{className:`tag ${!activeTag?'active':''}`,textContent:'Tous'});
+    allBtn.onclick=()=>{activeTag=null; render();};
+    bar.appendChild(allBtn);
+    gatherTags().forEach(t=>{
+      const b = create('button',{className:`tag ${activeTag===t?'active':''}`,textContent:t});
+      b.onclick=()=>{activeTag = activeTag===t?null:t; render();};
+      bar.appendChild(b);
+    });
+  }
+
+  function groupByCategory(items){
+    const map = new Map();
+    items.forEach(it=>{
+      const key = it.category||'Divers';
+      if(!map.has(key)) map.set(key,[]);
+      map.get(key).push(it);
+    });
+    return [...map.entries()].sort((a,b)=>a[0].localeCompare(b[0],'fr'));
+  }
+
+  function render(){
+    renderTags();
+    const favs = getFavs();
+    const filter = s => {
+      if (onlyFav && !favs.has(s.url)) return false;
+      if (activeTag && !(s.tags||[]).includes(activeTag)) return false;
+      if (!q) return true;
+      const hay = slug([s.name,s.url,(s.tags||[]).join(' ')].join(' '));
+      return hay.includes(slug(q));
+    };
+    const list = SERVICE_LIST.filter(filter);
+    const app = $('#app'); app.innerHTML='';
+    if(!list.length){ app.innerHTML = '<p class="sub">No service corresponding.</p>'; return; }
+
+    for(const [cat, items] of groupByCategory(list)){
+      const section = create('section', {className:'section'});
+      const h2 = create('h2',{textContent:cat});
+      const grid = create('div',{className:'grid'});
+      section.append(h2, grid);
+      app.appendChild(section);
+
+      items.forEach(svc=>{
+        const card = create('div',{className:'card'});
+        const a = create('a',{href:svc.url,target:'_blank',rel:'noopener noreferrer'});
+        const row = create('div',{className:'row'});
+        const icon = create('div',{className:'icon',innerText:svc.icon||'🔗'});
+        const text = create('div');
+        text.innerHTML = `<div class="name">${svc.name}</div><div class="url">${svc.url}</div>`;
+        row.append(icon,text); a.appendChild(row); card.appendChild(a);
+
+        const favBtn = create('button',{className:'favorite',title:'Add to favs',innerText: getFavs().has(svc.url)?'★':'☆'});
+        favBtn.onclick = (e)=>{ e.preventDefault(); e.stopPropagation();
+          const f = getFavs(); f.has(svc.url)?f.delete(svc.url):f.add(svc.url); setFavs(f);
+          favBtn.innerText = f.has(svc.url)?'★':'☆'; };
+        card.appendChild(favBtn);
+
+        const meta = create('div',{className:'meta'});
+        const chips = create('div',{className:'chips'});
+        (svc.tags||[]).forEach(t=> chips.appendChild(create('span',{className:'chip',textContent:t})) );
+        const status = create('div',{className:'status'});
+        status.innerHTML = `<span class="dot" title="inconnu"></span><span class="sub">Statut…</span>`;
+        meta.append(chips,status); card.appendChild(meta);
+
+        // Vérification statut async
+        if(svc.health){
+          checkStatus(svc, status.querySelector('.dot'), status.querySelector('.sub'));
+        } else {
+          // ping simple HEAD/GET
+          simplePing(svc.url, 3000).then(ok=>{
+            const d=status.querySelector('.dot'); const t=status.querySelector('.sub');
+            d.classList.add(ok?'ok':'bad'); t.textContent = ok? 'Online' : 'Offline';
+          });
+        }
+        grid.appendChild(card);
+      });
+    }
+  }
+
+  // ====== 4) STATUT / HEALTH CHECK ======
+  async function checkStatus(svc, dotEl, textEl){
+    const url = new URL((svc.health||'/'), svc.url).toString();
+    try{
+      const res = await timedFetch(url, {method:'GET'}, 4000);
+      if(res.ok){ dotEl.classList.add('ok'); textEl.textContent='Online'; }
+      else if(res.status>=500){ dotEl.classList.add('bad'); textEl.textContent='Server error'; }
+      else { dotEl.classList.add('warn'); textEl.textContent=`${res.status}`; }
+    }catch(e){ dotEl.classList.add('bad'); textEl.textContent='Offline'; }
+  }
+
+  function timedFetch(resource, options={}, timeout=5000){
+    const controller = new AbortController();
+    const id = setTimeout(()=>controller.abort(), timeout);
+    return fetch(resource, {...options, signal:controller.signal, mode:'no-cors'})
+      .finally(()=>clearTimeout(id));
+  }
+
+  function simplePing(url, timeout=3000){
+    // Best-effort: try fetching root with no-cors and a timeout
+    return timedFetch(url, {method:'HEAD'}, timeout).then(()=>true).catch(()=>false);
+  }
+
+  // ====== 5) CONTROLS ======
+  $('#q').addEventListener('input', (e)=>{ q=e.target.value; render(); });
+  $('#clearBtn').onclick = ()=>{ $('#q').value=''; q=''; render(); };
+  $('#onlyFavBtn').onclick = (e)=>{ onlyFav = !onlyFav; e.currentTarget.setAttribute('aria-pressed', String(onlyFav)); e.currentTarget.textContent = onlyFav? 'Afficher tout' : 'Afficher mes favoris'; render(); };
+  $('#checkAllBtn').onclick = ()=>{ render(); };
+
+  // Init
+  render();
+</script>
+</body>
+</html>
