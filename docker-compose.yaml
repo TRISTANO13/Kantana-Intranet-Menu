@@ -1,10 +1,20 @@
 services:
   intranet:
+    # Lightweight Nginx image (Alpine) to serve static files
     image: nginx:alpine
+
+    # Publish container port 80 on host port 80 (visit http://localhost/)
     ports:
       - "80:80"
+
+    # Mount the current folder (where this compose file lives) into Nginx’s web root.
+    # Read-only prevents changes from inside the container.
+    # Make sure your index.html (and assets) are in this folder.
     volumes:
       - ./:/usr/share/nginx/html:ro
+
+    # Keep the container running across reboots/crashes unless you stop it manually
     restart: unless-stopped
+
+    # Friendly container name for easier docker ps / logs / stop commands
     container_name: intranet-menu
-    
